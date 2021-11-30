@@ -40,4 +40,5 @@ pwm analog voltage\main.o: ../Middlewares/Third_Party/FreeRTOS/Source/portable/R
 pwm analog voltage\main.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h
 pwm analog voltage\main.o: D:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
 pwm analog voltage\main.o: D:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
+pwm analog voltage\main.o: D:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
 pwm analog voltage\main.o: D:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h

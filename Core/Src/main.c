@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "stdlib.h"
+#include "stdbool.h"
 #include "string.h"
 /* USER CODE END Includes */
 
@@ -36,7 +37,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PWM_PERIOD 500
-#define OUTPUT_MAX_VOLTAGE 3.3
+#define OUTPUT_MAX_VOLTAGE 5
 
 #define USART_REC_LEN	256
 
@@ -44,7 +45,7 @@
 #define ADDR_24LCxx_Read	0xA1
 #define MEMADDR_SysConfig 0x00
 #define MEMADDR_CHANNEL1	0x08
-#define MEMADDR_CHANNEL2	0x16
+#define MEMADDR_CHANNEL2	0x10
 // #define BufferSize 256
 /* USER CODE END PD */
 
@@ -67,12 +68,19 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for OutputControl */
-osThreadId_t OutputControlHandle;
-const osThreadAttr_t OutputControl_attributes = {
-  .name = "OutputControl",
+/* Definitions for OutputChannel1 */
+osThreadId_t OutputChannel1Handle;
+const osThreadAttr_t OutputChannel1_attributes = {
+  .name = "OutputChannel1",
   .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
+  .priority = (osPriority_t) osPriorityNormal1,
+};
+/* Definitions for OutputChannel2 */
+osThreadId_t OutputChannel2Handle;
+const osThreadAttr_t OutputChannel2_attributes = {
+  .name = "OutputChannel2",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal1,
 };
 /* USER CODE BEGIN PV */
 // 			½ÓÊÕ×´Ì¬
@@ -93,9 +101,9 @@ uint8_t E2P_Write_Buffer[8], E2P_Read_Buffer[8];
 struct Channel_Config
 {
 	double voltage;								// Voltage
-	uint8_t width;								// Pulse width
+	uint16_t period;							// Period
 	uint8_t duty;									// Duty cycle
-	uint8_t period;								// Period
+	uint8_t delay;								// Boot delay
 	uint8_t repeat;								// Repeat
 } STRUCT_CHANNEL1, STRUCT_CHANNEL2;
 /* USER CODE END PV */
@@ -107,7 +115,8 @@ static void MX_USART1_UART_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_I2C1_Init(void);
 void StartDefaultTask(void *argument);
-void OutputControlTask(void *argument);
+void OutputChannel1Task(void *argument);
+void OutputChannel2Task(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -169,8 +178,26 @@ uint8_t OUTPUT_CHANNEL[] = {0, TIM_CHANNEL_1, TIM_CHANNEL_2};
 void Set_Channel_Voltage(uint8_t channel, double voltage)
 {
 	__HAL_TIM_SetCompare(&htim3, OUTPUT_CHANNEL[channel], Voltage_Duty_Convert(voltage));
-	HAL_I2C_Mem_Write(&hi2c1, ADDR_24LCxx_Write, channel * 0x08, I2C_MEMADD_SIZE_8BIT, (uint8_t[]) {voltage * 10}, 1, 1000);
-	HAL_Delay(20);
+}
+
+void Update_Struct_Config()
+{
+	uint8_t Channel_Config_Buffer[8];
+	HAL_I2C_Mem_Read(&hi2c1, ADDR_24LCxx_Read, 1 * 0x08, I2C_MEMADD_SIZE_8BIT, Channel_Config_Buffer, 8, 0xff);
+	STRUCT_CHANNEL1.voltage	= Channel_Config_Buffer[0] / 10.0;
+	STRUCT_CHANNEL1.period	= (Channel_Config_Buffer[1] << 8) + Channel_Config_Buffer[2];
+	STRUCT_CHANNEL1.duty		= Channel_Config_Buffer[3];
+	STRUCT_CHANNEL1.delay		= Channel_Config_Buffer[4];
+	STRUCT_CHANNEL1.repeat	= Channel_Config_Buffer[5];
+	Set_Channel_Voltage(1, STRUCT_CHANNEL1.voltage);
+	
+	HAL_I2C_Mem_Read(&hi2c1, ADDR_24LCxx_Read, 2 * 0x08, I2C_MEMADD_SIZE_8BIT, Channel_Config_Buffer, 8, 0xff);
+	STRUCT_CHANNEL2.voltage	= Channel_Config_Buffer[0] / 10.0;
+	STRUCT_CHANNEL2.period	= (Channel_Config_Buffer[1] << 8) + Channel_Config_Buffer[2];
+	STRUCT_CHANNEL2.duty		= Channel_Config_Buffer[3];
+	STRUCT_CHANNEL2.delay		= Channel_Config_Buffer[4];
+	STRUCT_CHANNEL2.repeat	= Channel_Config_Buffer[5];
+	Set_Channel_Voltage(2, STRUCT_CHANNEL2.voltage);
 }
 
 void onCommandHandler(char *commands[])
@@ -186,16 +213,95 @@ void onCommandHandler(char *commands[])
 					if(!strcmp(commands[3], "VOLTAGE"))
 					{
 						Set_Channel_Voltage(atoi(commands[2]), atof(commands[4]));
-						uint8_t buffer[1];
-						HAL_I2C_Mem_Read(&hi2c1, ADDR_24LCxx_Read, atoi(commands[2]) * 0x08, I2C_MEMADD_SIZE_8BIT, buffer, 1, 0xff);
+						HAL_I2C_Mem_Write(&hi2c1, ADDR_24LCxx_Write, atoi(commands[2]) * 0x08, I2C_MEMADD_SIZE_8BIT, (uint8_t[]) {atof(commands[4]) * 10}, 1, 1000);
 						HAL_Delay(5);
-						printf("SET CHANNEL %d VOLTAGE TO %.2f\n", atoi(commands[2]), atof(commands[4]));
+						printf("[-]	SET CHANNEL %d VOLTAGE TO %.2fv\n", atoi(commands[2]), atof(commands[4]));
+					}
+					else if(!strcmp(commands[3], "PERIOD"))
+					{
+						uint16_t value = atoi(commands[4]);
+						if(value > 0xFFFF) value = 0xFFFF;
+						HAL_I2C_Mem_Write(&hi2c1, ADDR_24LCxx_Write, atoi(commands[2]) * 0x08 + 1, I2C_MEMADD_SIZE_8BIT, (uint8_t[]) {(value >> 8) & 0x00FF, value & 0x00FF}, 2, 1000);
+						HAL_Delay(10);
+						printf("[-]	SET CHANNEL %d PERIOD TO %d min(s)\n", atoi(commands[2]), value);
+					}
+					else if(!strcmp(commands[3], "DUTY"))
+					{
+						uint8_t value = atoi(commands[4]) & 0x7F;
+						if(value > 0x64) value = 0x64;
+						HAL_I2C_Mem_Write(&hi2c1, ADDR_24LCxx_Write, atoi(commands[2]) * 0x08 + 3, I2C_MEMADD_SIZE_8BIT, (uint8_t[]) {value}, 1, 1000);
+						HAL_Delay(5);
+						printf("[-]	SET CHANNEL %d DUTY TO %d%%\n", atoi(commands[2]), value);
+					}
+					else if(!strcmp(commands[3], "DUTY_REVERSE"))
+					{
+						uint8_t value = atoi(commands[4]) & 0x01;
+						
+						uint8_t buffer[1];
+						HAL_I2C_Mem_Read(&hi2c1, ADDR_24LCxx_Read, atoi(commands[2]) * 0x08 + 3, I2C_MEMADD_SIZE_8BIT, buffer, 1, 0xff);
+						HAL_Delay(5);
+						
+						uint8_t memValue = buffer[0];
+						bool isReversed = (memValue & 0x80) >> 7;
+						if(!(value == isReversed)) memValue ^= 0x80;
+						
+						HAL_I2C_Mem_Write(&hi2c1, ADDR_24LCxx_Write, atoi(commands[2]) * 0x08 + 3, I2C_MEMADD_SIZE_8BIT, (uint8_t[]) {memValue}, 1, 1000);
+						HAL_Delay(5);
+						printf("[-]	SET CHANNEL %d DUTY TURNED TO %s\n", atoi(commands[2]), !value ? "H to L" : "L to H");
+					}
+					else if(!strcmp(commands[3], "DELAY"))
+					{
+						uint8_t value = atoi(commands[4]);
+						HAL_I2C_Mem_Write(&hi2c1, ADDR_24LCxx_Write, atoi(commands[2]) * 0x08 + 4, I2C_MEMADD_SIZE_8BIT, (uint8_t[]) {value}, 1, 1000);
+						HAL_Delay(5);
+						printf("[-]	SET CHANNEL %d DELAY TO %d sec(s)\n", atoi(commands[2]), value);
+					}
+					else if(!strcmp(commands[3], "REPEAT"))
+					{
+						uint8_t value = atoi(commands[4]);
+						HAL_I2C_Mem_Write(&hi2c1, ADDR_24LCxx_Write, atoi(commands[2]) * 0x08 + 5, I2C_MEMADD_SIZE_8BIT, (uint8_t[]) {value}, 1, 1000);
+						HAL_Delay(5);
+						printf("[-]	SET CHANNEL %d REPEAT TO %d time(s)\n", atoi(commands[2]), value);
+					}
+					else 
+					{
+						printf("[!]	Unknown command [%s]\n", commands[3]);
 					}
 					break;
 				default:
-					printf("Unknown channel %s\n", commands[2]);
+					printf("[!]	Unknown channel [%s]\n", commands[2]);
 			}
 		}
+		Update_Struct_Config();
+	}
+	else if(!strcmp(commands[0], "GET"))
+	{
+		if(!strcmp(commands[1], "CONFIG"))
+		{
+			switch(atoi(commands[2]))
+			{
+				case 1:
+					printf("[-] CHANNEL 1 Configuration\nVoltage:	%.2fv\nPeriod:		%d min(s)\nDuty:		%d%%\nDelay:		%ds\nRepeat:		%d time(s)\n\n",
+					STRUCT_CHANNEL1.voltage,
+					STRUCT_CHANNEL1.period,
+					STRUCT_CHANNEL1.duty & 0x7F,
+					STRUCT_CHANNEL1.delay,
+					STRUCT_CHANNEL1.repeat);
+					break;
+				case 2:
+					printf("[-] CHANNEL 2 Configuration\nVoltage:	%.2fv\nPeriod:		%d min(s)\nDuty:		%d%%\nDelay:		%ds\nRepeat:		%d time(s)\n\n",
+					STRUCT_CHANNEL2.voltage,
+					STRUCT_CHANNEL2.period,
+					STRUCT_CHANNEL2.duty & 0x7F,
+					STRUCT_CHANNEL2.delay,
+					STRUCT_CHANNEL2.repeat);
+					break;
+			}
+		}
+	}
+	if(!strcmp(commands[0], "RESET"))
+	{
+		HAL_NVIC_SystemReset();
 	}
 }
 /* USER CODE END 0 */
@@ -235,22 +341,9 @@ int main(void)
 	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
 	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
 	__HAL_UART_ENABLE_IT(&huart1, UART_IT_RXNE);
-	printf("System is up now!\n");
+	printf("[!] System is up now!\n\n");
 	
-	uint8_t Channel_Config_Buffer[8];
-	HAL_I2C_Mem_Read(&hi2c1, ADDR_24LCxx_Read, 1 * 0x08, I2C_MEMADD_SIZE_8BIT, Channel_Config_Buffer, 8, 0xff);
-	STRUCT_CHANNEL1.voltage	= Channel_Config_Buffer[0] / 10.0;
-	STRUCT_CHANNEL1.width		= Channel_Config_Buffer[1];
-	STRUCT_CHANNEL1.duty		= Channel_Config_Buffer[2];
-	STRUCT_CHANNEL1.repeat	= Channel_Config_Buffer[3];
-	Set_Channel_Voltage(1, STRUCT_CHANNEL1.voltage);
-	
-	HAL_I2C_Mem_Read(&hi2c1, ADDR_24LCxx_Read, 2 * 0x08, I2C_MEMADD_SIZE_8BIT, Channel_Config_Buffer, 8, 0xff);
-	STRUCT_CHANNEL2.voltage	= Channel_Config_Buffer[0] / 10.0;
-	STRUCT_CHANNEL2.width		= Channel_Config_Buffer[1];
-	STRUCT_CHANNEL2.duty		= Channel_Config_Buffer[2];
-	STRUCT_CHANNEL2.repeat	= Channel_Config_Buffer[3];
-	Set_Channel_Voltage(2, STRUCT_CHANNEL2.voltage);
+	Update_Struct_Config();
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -276,8 +369,11 @@ int main(void)
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
-  /* creation of OutputControl */
-  OutputControlHandle = osThreadNew(OutputControlTask, NULL, &OutputControl_attributes);
+  /* creation of OutputChannel1 */
+  OutputChannel1Handle = osThreadNew(OutputChannel1Task, NULL, &OutputChannel1_attributes);
+
+  /* creation of OutputChannel2 */
+  OutputChannel2Handle = osThreadNew(OutputChannel2Task, NULL, &OutputChannel2_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -519,22 +615,86 @@ void StartDefaultTask(void *argument)
   /* USER CODE END 5 */
 }
 
-/* USER CODE BEGIN Header_OutputControlTask */
+/* USER CODE BEGIN Header_OutputChannel1Task */
 /**
-* @brief Function implementing the OutputControl thread.
+* @brief Function implementing the OutputChannel1 thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_OutputControlTask */
-void OutputControlTask(void *argument)
+/* USER CODE END Header_OutputChannel1Task */
+void OutputChannel1Task(void *argument)
 {
-  /* USER CODE BEGIN OutputControlTask */
+  /* USER CODE BEGIN OutputChannel1Task */
+	int Repeat;
+	double Period_H, Period_L, percent;
   /* Infinite loop */
   for(;;)
   {
-    osDelay(50);
+		percent = (STRUCT_CHANNEL1.duty & 0x7F) / 100.0;
+		Period_L	=	STRUCT_CHANNEL1.period * percent;
+		Period_H	= STRUCT_CHANNEL1.period - Period_L;
+		Repeat		= STRUCT_CHANNEL1.repeat;
+    osDelay(STRUCT_CHANNEL1.delay * 1000);
+		for(int i = 0; i < Repeat; i++)
+		{
+			if((STRUCT_CHANNEL1.duty & 0x80) >> 7 == 0)
+			{
+				Set_Channel_Voltage(1, STRUCT_CHANNEL1.voltage);
+				osDelay(Period_H * 1000 * 60);
+				Set_Channel_Voltage(1, 0);
+				osDelay(Period_L * 1000 * 60);
+			}
+			else
+			{
+				Set_Channel_Voltage(1, 0);
+				osDelay(Period_L * 1000 * 60);
+				Set_Channel_Voltage(1, STRUCT_CHANNEL1.voltage);
+				osDelay(Period_H * 1000 * 60);
+			}
+		}
   }
-  /* USER CODE END OutputControlTask */
+  /* USER CODE END OutputChannel1Task */
+}
+
+/* USER CODE BEGIN Header_OutputChannel2Task */
+/**
+* @brief Function implementing the OutputChannel2 thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_OutputChannel2Task */
+void OutputChannel2Task(void *argument)
+{
+  /* USER CODE BEGIN OutputChannel2Task */
+	int Repeat;
+	double Period_H, Period_L, percent;
+  /* Infinite loop */
+  for(;;)
+  {
+		percent = (STRUCT_CHANNEL2.duty & 0x7F) / 100.0;
+		Period_L	=	STRUCT_CHANNEL2.period * percent;
+		Period_H	= STRUCT_CHANNEL2.period - Period_L;
+		Repeat		= STRUCT_CHANNEL2.repeat;
+    osDelay(STRUCT_CHANNEL2.delay * 1000);
+		for(int i = 0; i < Repeat; i++)
+		{
+			if((STRUCT_CHANNEL2.duty & 0x80) >> 7 == 0)
+			{
+				Set_Channel_Voltage(2, STRUCT_CHANNEL2.voltage);
+				osDelay(Period_H * 1000 * 60);
+				Set_Channel_Voltage(2, 0);
+				osDelay(Period_L * 1000 * 60);
+			}
+			else
+			{
+				Set_Channel_Voltage(2, 0);
+				osDelay(Period_L * 1000 * 60);
+				Set_Channel_Voltage(2, STRUCT_CHANNEL2.voltage);
+				osDelay(Period_H * 1000 * 60);
+			}
+		}
+  }
+  /* USER CODE END OutputChannel2Task */
 }
 
 /**
