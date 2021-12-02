@@ -98,6 +98,10 @@ uint8_t idx = 0;
 uint8_t dataLength;
 
 uint8_t E2P_Write_Buffer[8], E2P_Read_Buffer[8];
+struct System_Config
+{
+	bool sync;										// Sync or Async mode
+} STRUCT_SYSTEM;
 struct Channel_Config
 {
 	double voltage;								// Voltage
@@ -106,6 +110,8 @@ struct Channel_Config
 	uint8_t delay;								// Boot delay
 	uint8_t repeat;								// Repeat
 } STRUCT_CHANNEL1, STRUCT_CHANNEL2;
+
+uint8_t currentChannel = 1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -182,29 +188,36 @@ void Set_Channel_Voltage(uint8_t channel, double voltage)
 
 void Update_Struct_Config()
 {
-	uint8_t Channel_Config_Buffer[8];
-	HAL_I2C_Mem_Read(&hi2c1, ADDR_24LCxx_Read, 1 * 0x08, I2C_MEMADD_SIZE_8BIT, Channel_Config_Buffer, 8, 0xff);
-	STRUCT_CHANNEL1.voltage	= Channel_Config_Buffer[0] / 10.0;
-	STRUCT_CHANNEL1.period	= (Channel_Config_Buffer[1] << 8) + Channel_Config_Buffer[2];
-	STRUCT_CHANNEL1.duty		= Channel_Config_Buffer[3];
-	STRUCT_CHANNEL1.delay		= Channel_Config_Buffer[4];
-	STRUCT_CHANNEL1.repeat	= Channel_Config_Buffer[5];
-	Set_Channel_Voltage(1, STRUCT_CHANNEL1.voltage);
+	uint8_t Config_Buffer[8];
+	HAL_I2C_Mem_Read(&hi2c1, ADDR_24LCxx_Read, 1 * 0x08, I2C_MEMADD_SIZE_8BIT, Config_Buffer, 8, 0xff);
+	STRUCT_CHANNEL1.voltage	= Config_Buffer[0] / 10.0;
+	STRUCT_CHANNEL1.period	= (Config_Buffer[1] << 8) + Config_Buffer[2];
+	STRUCT_CHANNEL1.duty		= Config_Buffer[3];
+	STRUCT_CHANNEL1.delay		= Config_Buffer[4];
+	STRUCT_CHANNEL1.repeat	= Config_Buffer[5];
 	
-	HAL_I2C_Mem_Read(&hi2c1, ADDR_24LCxx_Read, 2 * 0x08, I2C_MEMADD_SIZE_8BIT, Channel_Config_Buffer, 8, 0xff);
-	STRUCT_CHANNEL2.voltage	= Channel_Config_Buffer[0] / 10.0;
-	STRUCT_CHANNEL2.period	= (Channel_Config_Buffer[1] << 8) + Channel_Config_Buffer[2];
-	STRUCT_CHANNEL2.duty		= Channel_Config_Buffer[3];
-	STRUCT_CHANNEL2.delay		= Channel_Config_Buffer[4];
-	STRUCT_CHANNEL2.repeat	= Channel_Config_Buffer[5];
-	Set_Channel_Voltage(2, STRUCT_CHANNEL2.voltage);
+	HAL_I2C_Mem_Read(&hi2c1, ADDR_24LCxx_Read, 2 * 0x08, I2C_MEMADD_SIZE_8BIT, Config_Buffer, 8, 0xff);
+	STRUCT_CHANNEL2.voltage	= Config_Buffer[0] / 10.0;
+	STRUCT_CHANNEL2.period	= (Config_Buffer[1] << 8) + Config_Buffer[2];
+	STRUCT_CHANNEL2.duty		= Config_Buffer[3];
+	STRUCT_CHANNEL2.delay		= Config_Buffer[4];
+	STRUCT_CHANNEL2.repeat	= Config_Buffer[5];
+	
+	HAL_I2C_Mem_Read(&hi2c1, ADDR_24LCxx_Read, 0x00, I2C_MEMADD_SIZE_8BIT, Config_Buffer, 1, 0xff);
+	STRUCT_SYSTEM.sync = Config_Buffer[0];
 }
 
 void onCommandHandler(char *commands[])
 {
 	if(!strcmp(commands[0], "SET"))
 	{
-		if(!strcmp(commands[1], "CHANNEL"))
+		if(!strcmp(commands[1], "MODE"))
+		{
+			HAL_I2C_Mem_Write(&hi2c1, ADDR_24LCxx_Write, 0x00, I2C_MEMADD_SIZE_8BIT, (uint8_t[]) {!strcmp(commands[2], "SYNC")}, 1, 1000);
+			HAL_Delay(5);
+			printf("[-] SWITCH TO %s mode\n", !strcmp(commands[2], "SYNC") ? "sync" : "async");
+		}
+		else if(!strcmp(commands[1], "CHANNEL"))
 		{
 			switch(atoi(commands[2]))
 			{
@@ -281,18 +294,20 @@ void onCommandHandler(char *commands[])
 			switch(atoi(commands[2]))
 			{
 				case 1:
-					printf("[-] CHANNEL 1 Configuration\nVoltage:	%.2fv\nPeriod:		%d min(s)\nDuty:		%d%%\nDelay:		%ds\nRepeat:		%d time(s)\n\n",
+					printf("[-] CHANNEL 1 Configuration\nVoltage:	%.2fv\nPeriod:		%d min(s)\nDuty:		%d%%%s\nDelay:		%ds\nRepeat:		%d time(s)\n\n",
 					STRUCT_CHANNEL1.voltage,
 					STRUCT_CHANNEL1.period,
 					STRUCT_CHANNEL1.duty & 0x7F,
+					(STRUCT_CHANNEL1.duty & 0x80) >> 7 ? "(reversed)" : "",
 					STRUCT_CHANNEL1.delay,
 					STRUCT_CHANNEL1.repeat);
 					break;
 				case 2:
-					printf("[-] CHANNEL 2 Configuration\nVoltage:	%.2fv\nPeriod:		%d min(s)\nDuty:		%d%%\nDelay:		%ds\nRepeat:		%d time(s)\n\n",
+					printf("[-] CHANNEL 2 Configuration\nVoltage:	%.2fv\nPeriod:		%d min(s)\nDuty:		%d%%%s\nDelay:		%ds\nRepeat:		%d time(s)\n\n",
 					STRUCT_CHANNEL2.voltage,
 					STRUCT_CHANNEL2.period,
 					STRUCT_CHANNEL2.duty & 0x7F,
+					(STRUCT_CHANNEL2.duty & 0x80) >> 7 ? "(reversed)" : "",
 					STRUCT_CHANNEL2.delay,
 					STRUCT_CHANNEL2.repeat);
 					break;
@@ -630,7 +645,8 @@ void OutputChannel1Task(void *argument)
   /* Infinite loop */
   for(;;)
   {
-		percent = (STRUCT_CHANNEL1.duty & 0x7F) / 100.0;
+		if(STRUCT_SYSTEM.sync && (currentChannel != 1)) break;
+		percent		= (STRUCT_CHANNEL1.duty & 0x7F) / 100.0;
 		Period_L	=	STRUCT_CHANNEL1.period * percent;
 		Period_H	= STRUCT_CHANNEL1.period - Period_L;
 		Repeat		= STRUCT_CHANNEL1.repeat;
@@ -652,6 +668,7 @@ void OutputChannel1Task(void *argument)
 				osDelay(Period_H * 1000 * 60);
 			}
 		}
+		currentChannel = 2;
   }
   /* USER CODE END OutputChannel1Task */
 }
@@ -671,7 +688,8 @@ void OutputChannel2Task(void *argument)
   /* Infinite loop */
   for(;;)
   {
-		percent = (STRUCT_CHANNEL2.duty & 0x7F) / 100.0;
+		if(STRUCT_SYSTEM.sync && (currentChannel != 2)) break;
+		percent		= (STRUCT_CHANNEL2.duty & 0x7F) / 100.0;
 		Period_L	=	STRUCT_CHANNEL2.period * percent;
 		Period_H	= STRUCT_CHANNEL2.period - Period_L;
 		Repeat		= STRUCT_CHANNEL2.repeat;
@@ -693,6 +711,7 @@ void OutputChannel2Task(void *argument)
 				osDelay(Period_H * 1000 * 60);
 			}
 		}
+		currentChannel = 1;
   }
   /* USER CODE END OutputChannel2Task */
 }

@@ -3,7 +3,7 @@
 <title>Static Call Graph - [PWM analog voltage\PWM analog voltage.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image PWM analog voltage\PWM analog voltage.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060422: Last Updated: Mon Nov 29 22:41:32 2021
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060422: Last Updated: Wed Dec 01 10:40:06 2021
 <BR><P>
 <H3>Maximum Stack Usage =        272 bytes + Unknown(Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
@@ -952,8 +952,8 @@ Global Symbols
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> startup_stm32f103xb.o(RESET)
 </UL>
-<P><STRONG><a name="[3e]"></a>OutputChannel1Task</STRONG> (Thumb, 242 bytes, Stack size 0 bytes, main.o(i.OutputChannel1Task))
-<BR><BR>[Stack]<UL><LI>Max Depth = 112<LI>Call Chain = OutputChannel1Task &rArr; Set_Channel_Voltage &rArr; Voltage_Duty_Convert &rArr; __aeabi_dmul &rArr; _double_epilogue &rArr; _double_round
+<P><STRONG><a name="[3e]"></a>OutputChannel1Task</STRONG> (Thumb, 276 bytes, Stack size 40 bytes, main.o(i.OutputChannel1Task))
+<BR><BR>[Stack]<UL><LI>Max Depth = 152<LI>Call Chain = OutputChannel1Task &rArr; Set_Channel_Voltage &rArr; Voltage_Duty_Convert &rArr; __aeabi_dmul &rArr; _double_epilogue &rArr; _double_round
 </UL>
 <BR>[Calls]<UL><LI><a href="#[ae]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osDelay
 <LI><a href="#[55]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_ui2d
@@ -965,8 +965,8 @@ Global Symbols
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> main.o(i.main)
 </UL>
-<P><STRONG><a name="[3f]"></a>OutputChannel2Task</STRONG> (Thumb, 242 bytes, Stack size 0 bytes, main.o(i.OutputChannel2Task))
-<BR><BR>[Stack]<UL><LI>Max Depth = 112<LI>Call Chain = OutputChannel2Task &rArr; Set_Channel_Voltage &rArr; Voltage_Duty_Convert &rArr; __aeabi_dmul &rArr; _double_epilogue &rArr; _double_round
+<P><STRONG><a name="[3f]"></a>OutputChannel2Task</STRONG> (Thumb, 276 bytes, Stack size 40 bytes, main.o(i.OutputChannel2Task))
+<BR><BR>[Stack]<UL><LI>Max Depth = 152<LI>Call Chain = OutputChannel2Task &rArr; Set_Channel_Voltage &rArr; Voltage_Duty_Convert &rArr; __aeabi_dmul &rArr; _double_epilogue &rArr; _double_round
 </UL>
 <BR>[Calls]<UL><LI><a href="#[ae]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osDelay
 <LI><a href="#[55]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_ui2d
@@ -984,7 +984,6 @@ Global Symbols
 <BR>[Calls]<UL><LI><a href="#[b0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Voltage_Duty_Convert
 </UL>
 <BR>[Called By]<UL><LI><a href="#[b2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;onCommandHandler
-<LI><a href="#[b8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Update_Struct_Config
 <LI><a href="#[3f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;OutputChannel2Task
 <LI><a href="#[3e]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;OutputChannel1Task
 </UL>
@@ -1066,13 +1065,12 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[2f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;USART1_IRQHandler
 </UL>
 
-<P><STRONG><a name="[b8]"></a>Update_Struct_Config</STRONG> (Thumb, 184 bytes, Stack size 40 bytes, main.o(i.Update_Struct_Config))
+<P><STRONG><a name="[b8]"></a>Update_Struct_Config</STRONG> (Thumb, 196 bytes, Stack size 40 bytes, main.o(i.Update_Struct_Config))
 <BR><BR>[Stack]<UL><LI>Max Depth = 176<LI>Call Chain = Update_Struct_Config &rArr; HAL_I2C_Mem_Read &rArr; I2C_RequestMemoryRead &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[55]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_ui2d
 <LI><a href="#[54]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_ddiv
 <LI><a href="#[6c]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_I2C_Mem_Read
-<LI><a href="#[af]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Set_Channel_Voltage
 </UL>
 <BR>[Called By]<UL><LI><a href="#[b2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;onCommandHandler
 <LI><a href="#[35]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;main
@@ -1173,7 +1171,7 @@ Global Symbols
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> entry9a.o(.ARM.Collect$$$$0000000B)
 </UL>
-<P><STRONG><a name="[b2]"></a>onCommandHandler</STRONG> (Thumb, 802 bytes, Stack size 48 bytes, main.o(i.onCommandHandler))
+<P><STRONG><a name="[b2]"></a>onCommandHandler</STRONG> (Thumb, 906 bytes, Stack size 48 bytes, main.o(i.onCommandHandler))
 <BR><BR>[Stack]<UL><LI>Max Depth = 272<LI>Call Chain = onCommandHandler &rArr; atof &rArr; __strtod_int &rArr; _local_sscanf &rArr; _scanf_real
 </UL>
 <BR>[Calls]<UL><LI><a href="#[53]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_dmul
@@ -1184,10 +1182,10 @@ Global Symbols
 <LI><a href="#[67]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_Delay
 <LI><a href="#[b8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Update_Struct_Config
 <LI><a href="#[af]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Set_Channel_Voltage
-<LI><a href="#[c0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;atof
 <LI><a href="#[49]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;atoi
 <LI><a href="#[c3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__2printf
 <LI><a href="#[c7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;strcmp
+<LI><a href="#[c0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;atof
 </UL>
 <BR>[Called By]<UL><LI><a href="#[3d]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;StartDefaultTask
 </UL>
